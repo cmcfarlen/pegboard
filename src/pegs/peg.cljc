@@ -89,15 +89,24 @@
 
 (defn find-solution
   "Return a seq of lists of moves to solve the given board"
-  [bd]
-  (map second (filter #(= 1 (apply + (first %)))
-                        (move-seq bd))))
+  ([bd]
+   (map second (filter #(= 1 (apply + (first %)))
+                       (move-seq bd))))
+  ([bd pattern]
+   (println "called with: " pattern)
+   (map second (filter #(= pattern (first %))
+                       (move-seq bd)))))
 
 (comment
 
+
+
  (time (count (move-seq [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
 
- (time (first (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
+ (time (count (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1] [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0] #_[0 0 0 0 0 0 0 0 0 0 0 0 1 0 0])))
+
+(reductions move [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1] (first (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
+
 
  (filter #(= 1 (apply + %)) (tree-seq
                               not-game-over?

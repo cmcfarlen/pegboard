@@ -11,13 +11,15 @@
                                  :hover nil
                                  :selected nil
                                  :history []}
+                          :preview nil
+                          :last-move nil
                           :solutions []}))
 
 
 (defn board-markup
   "td is a fn to generate the :td"
   [td]
-  [:table {:border 1}
+  [:table
    [:tr [:td {:colSpan 4} ""] (td 0) [:td {:colSpan 4} ""]]
    [:tr [:td {:colSpan 3} ""] (td 1) [:td "-"] (td 2) [:td {:colSpan 3} ""]]
    [:tr [:td {:colSpan 2} ""] (td 3) [:td "-"] (td 4) [:td "-"] (td 5) [:td {:colSpan 2} ""]]
@@ -73,6 +75,7 @@
       (render [_]
         (html/html [:div
                     (om/build render-board (:game data))
+                    [:div.board (board-markup #(or [:td (str %)]))]
                     [:div
                      [:button {:on-click
                                (fn [_]
@@ -91,7 +94,7 @@
                                  (om/update! data :game {:selected nil
                                                          :hover nil
                                                          :board [1 1 1 1 1 1 1 1 1 1 1 1 1 0 1]
-                                                         :history []}))} "Left of Corner"]
+                                                         :history []}))} "LeftofCorner"]
                      [:button {:on-click
                                (fn [_]
                                  (om/update! data :game {:selected nil
@@ -108,9 +111,8 @@
                      [:button {:on-click
                                (fn [_]
                                  (println (-> data :game :board))
-                                 (om/update! data :solutions (into [] (take 1 (peg/find-solution (-> data :game :board)))))
+                                 (om/update! data :solutions (into [] (take 10 (peg/find-solution (-> data :game :board)))))
                                  #_(let [s (peg/move-seq (-> data :game :board))
-                                       _ (print "moves: " (take 1 s))
                                        ch (async/chan)
                                        on-ch (async/onto-chan ch s)]
                                    (go
@@ -121,17 +123,41 @@
                                              (println "Found a solution!: " moves)
                                              (om/transact! data :solutions #(conj % moves))))
                                          (om/transact! data :count (fnil inc 0))
+                                         (<! (async/timeout 1))
                                          (recur))
                                        (println "done!")))))
                                } "Solutions"]
                      (if-let [cnt (:count data)]
                        [:span (str "Count: " cnt)])
+                     (let [preview (:preview data)
+                           last-move (into #{} (:last-move data))]
+                        (if preview
+                          [:div.board (board-markup #(or [:td
+                                                          {:className (if (last-move %)
+                                                                        "highlight"
+                                                                        ""
+                                                                        )}
+                                                          (preview %)]))]))
                      (if-let [soln (:solutions data)]
                        [:div
                         [:p (str "Solution count: " (count soln))]
                         [:ul.solutions
-                         (map #(or [:li (pr-str %)]) soln)]])]
-                    ]))))
+                         (map #(or [:li
+                                    (map (fn [mv b]
+                                           [:span {:on-mouse-over
+                                                   (fn [_]
+                                                     (println "hover")
+                                                     (om/update! data :preview b)
+                                                     (om/update! data :last-move mv)
+                                                     )
+                                                   :on-mouse-out
+                                                   (fn [_]
+                                                     (println "hover")
+                                                     (om/update! data :preview (-> @data :game :board))
+                                                     (om/update! data :last-move nil)
+                                                     )} (pr-str mv)]
+                                           ) % (reductions peg/move (-> data :game :board) %))
+                                    ]) soln)]])]]))))
   app-state
   {:target (. js/document (getElementById "app"))})
 

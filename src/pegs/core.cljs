@@ -58,12 +58,11 @@
                                      (om/update! data :selected i)))
                        :on-mouse-over (fn [_]
                                         (om/update! data :hover i))} (bd i)])]
-        (println (:history data))
         (html/html
          [:div
           (if (peg/game-over? bd) [:h3 "Game over"])
           [:div.board (board-markup td)]
-          [:div.history [:ul
+          #_[:div.history [:ul
            (map (fn [b]
                   [:li (board-markup #(or [:td (b %)]))]
                   ) (:history data))]]])))))
@@ -87,7 +86,6 @@
       (render [_]
         (html/html [:div
                     (om/build render-board (:game data))
-                    [:div.board (board-markup #(or [:td (str %)]))]
                     [:div
                      [:select {:ref "placement"}
                       (map (fn [[bname bd]] [:option {:value (str bd)} bname])
@@ -129,6 +127,8 @@
                                } "Solutions"]
                      (if-let [cnt (:count data)]
                        [:span (str "Count: " cnt)])
+                     [:hr]
+                     [:div.board (board-markup #(or [:td (str %)]))]
                      (let [preview (:preview data)
                            last-move (into #{} (:last-move data))]
                         (if preview

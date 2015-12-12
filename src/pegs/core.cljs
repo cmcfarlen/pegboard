@@ -2,7 +2,8 @@
   (:require [om.core :as om :include-macros true]
             [sablono.core :as html :refer-macros [html]]
             [cljs.core.async :as async :refer [<! >!]]
-            [pegs.peg :as peg])
+            [pegs.peg :as peg]
+            [cljs.reader :as reader])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (enable-console-print!)
@@ -67,6 +68,17 @@
                   [:li (board-markup #(or [:td (b %)]))]
                   ) (:history data))]]])))))
 
+(defn play-moves
+  [cursor boards]
+  (println boards)
+  (go
+    (loop [n (first boards)
+           r (rest boards)]
+      (when n
+        (om/update! cursor :preview (second n))
+        (om/update! cursor :last-move (first n))
+        (<! (async/timeout 750))
+        (recur (first r) (rest r))))))
 
 (om/root
   (fn [data owner]
@@ -77,30 +89,21 @@
                     (om/build render-board (:game data))
                     [:div.board (board-markup #(or [:td (str %)]))]
                     [:div
+                     [:select {:ref "placement"}
+                      (map (fn [[bname bd]] [:option {:value (str bd)} bname])
+                           {"Center" [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1]
+                            "Corner" [1 1 1 1 1 1 1 1 1 1 1 1 1 1 0]
+                            "LeftOfCorner" [1 1 1 1 1 1 1 1 1 1 1 1 1 0 1]
+                            "Bottom Center" [1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
+                            "Easy" [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0]})]
                      [:button {:on-click
                                (fn [_]
-                                 (om/update! data :game {:selected nil
+                                 (let [e (om/get-node owner "placement")
+                                       bd (reader/read-string (.. e -value))]
+                                   (om/update! data :game {:selected nil
                                                          :hover nil
-                                                         :board [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1]
-                                                         :history []}))} "Center"]
-                     [:button {:on-click
-                               (fn [_]
-                                 (om/update! data :game {:selected nil
-                                                         :hover nil
-                                                         :board [1 1 1 1 1 1 1 1 1 1 1 1 1 1 0]
-                                                         :history []}))} "Corner"]
-                     [:button {:on-click
-                               (fn [_]
-                                 (om/update! data :game {:selected nil
-                                                         :hover nil
-                                                         :board [1 1 1 1 1 1 1 1 1 1 1 1 1 0 1]
-                                                         :history []}))} "LeftofCorner"]
-                     [:button {:on-click
-                               (fn [_]
-                                 (om/update! data :game {:selected nil
-                                                         :hover nil
-                                                         :board [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0]
-                                                         :history []}))} "Easy"]
+                                                         :board bd
+                                                         :history []})))} "Reset"]
                      [:button {:on-click
                                (fn [_]
                                  (om/transact! data :game #(let [hist (:history %)
@@ -110,7 +113,6 @@
                                                                     :history (into [] (butlast hist))))))} "Undo"]
                      [:button {:on-click
                                (fn [_]
-                                 (println (-> data :game :board))
                                  (om/update! data :solutions (into [] (take 10 (peg/find-solution (-> data :game :board)))))
                                  #_(let [s (peg/move-seq (-> data :game :board))
                                        ch (async/chan)
@@ -120,12 +122,10 @@
                                        (when-let [r (<! ch)]
                                          (let [[bd moves] r]
                                            (when (= 1 (apply + bd))
-                                             (println "Found a solution!: " moves)
                                              (om/transact! data :solutions #(conj % moves))))
                                          (om/transact! data :count (fnil inc 0))
                                          (<! (async/timeout 1))
-                                         (recur))
-                                       (println "done!")))))
+                                         (recur))))))
                                } "Solutions"]
                      (if-let [cnt (:count data)]
                        [:span (str "Count: " cnt)])
@@ -138,29 +138,27 @@
                                                                         ""
                                                                         )}
                                                           (preview %)]))]))
-                     (if-let [soln (:solutions data)]
+                     (if-let [solutions (:solutions data)]
                        [:div
-                        [:p (str "Solution count: " (count soln))]
+                        [:p (str "Solution count: " (count solutions))]
                         [:ul.solutions
-                         (map #(or [:li
-                                    (map (fn [mv b]
-                                           [:span {:on-mouse-over
-                                                   (fn [_]
-                                                     (println "hover")
-                                                     (om/update! data :preview b)
-                                                     (om/update! data :last-move mv)
-                                                     )
-                                                   :on-mouse-out
-                                                   (fn [_]
-                                                     (println "hover")
-                                                     (om/update! data :preview (-> @data :game :board))
-                                                     (om/update! data :last-move nil)
-                                                     )} (pr-str mv)]
-                                           ) % (reductions peg/move (-> data :game :board) %))
-                                    ]) soln)]])]]))))
+                         (map (fn [soln]
+                                (let [boards (reductions peg/move (-> data :game :board) soln)]
+                                  [:li
+                                   (map (fn [mv b]
+                                          [:span {:on-mouse-over
+                                                  (fn [_]
+                                                    (om/update! data :preview b)
+                                                    (om/update! data :last-move mv))
+                                                  :on-mouse-out
+                                                  (fn [_]
+                                                    (om/update! data :preview (-> @data :game :board))
+                                                    (om/update! data :last-move nil)
+                                                    )} (pr-str mv)]
+                                          ) soln boards)
+                                   [:button {:on-click (fn [_] (play-moves data (map vector (conj soln nil) boards)))} ">"]])) solutions)]])]]))))
   app-state
   {:target (. js/document (getElementById "app"))})
-
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

@@ -60,12 +60,13 @@
                                         (om/update! data :hover i))} (bd i)])]
         (html/html
          [:div
-          (if (peg/game-over? bd) [:h3 "Game over"])
-          [:div.board (board-markup td)]
-          #_[:div.history [:ul
-           (map (fn [b]
-                  [:li (board-markup #(or [:td (b %)]))]
-                  ) (:history data))]]])))))
+          (if (peg/game-over? bd)
+            [:h3 (str "Game Over - " (case (apply + bd)
+                                       1 "Genius"
+                                       2 "Smart"
+                                       3 "Pretty Good"
+                                       "Awful"))])
+          [:div.board (board-markup td)]])))))
 
 (defn play-moves
   [cursor boards]
@@ -79,6 +80,13 @@
         (<! (async/timeout 750))
         (recur (first r) (rest r))))))
 
+(def initial-boards
+  {"Center" [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1]
+   "Corner" [1 1 1 1 1 1 1 1 1 1 1 1 1 1 0]
+   "LeftOfCorner" [1 1 1 1 1 1 1 1 1 1 1 1 1 0 1]
+   "Bottom Center" [1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
+   "Easy" [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0]})
+
 (om/root
   (fn [data owner]
     (reify
@@ -89,11 +97,7 @@
                     [:div
                      [:select {:ref "placement"}
                       (map (fn [[bname bd]] [:option {:value (str bd)} bname])
-                           {"Center" [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1]
-                            "Corner" [1 1 1 1 1 1 1 1 1 1 1 1 1 1 0]
-                            "LeftOfCorner" [1 1 1 1 1 1 1 1 1 1 1 1 1 0 1]
-                            "Bottom Center" [1 1 1 1 1 1 1 1 1 1 1 1 0 1 1]
-                            "Easy" [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0]})]
+                           initial-boards)]
                      [:button {:on-click
                                (fn [_]
                                  (let [e (om/get-node owner "placement")
@@ -106,25 +110,14 @@
                                (fn [_]
                                  (om/transact! data :game #(let [hist (:history %)
                                                                  last-bd (last hist)]
-                                                             (assoc %
-                                                                    :board last-bd
-                                                                    :history (into [] (butlast hist))))))} "Undo"]
+                                                             (when last-bd
+                                                               (assoc %
+                                                                      :board last-bd
+                                                                      :history (into [] (butlast hist)))))))} "Undo"]
                      [:button {:on-click
                                (fn [_]
-                                 (om/update! data :solutions (into [] (take 10 (peg/find-solution (-> data :game :board)))))
-                                 #_(let [s (peg/move-seq (-> data :game :board))
-                                       ch (async/chan)
-                                       on-ch (async/onto-chan ch s)]
-                                   (go
-                                     (loop []
-                                       (when-let [r (<! ch)]
-                                         (let [[bd moves] r]
-                                           (when (= 1 (apply + bd))
-                                             (om/transact! data :solutions #(conj % moves))))
-                                         (om/transact! data :count (fnil inc 0))
-                                         (<! (async/timeout 1))
-                                         (recur))))))
-                               } "Solutions"]
+                                 (om/update! data :solutions (into [] (take 10 (peg/find-solution (-> data :game :board))))))}
+                      "Solutions"]
                      (if-let [cnt (:count data)]
                        [:span (str "Count: " cnt)])
                      [:hr]

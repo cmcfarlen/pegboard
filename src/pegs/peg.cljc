@@ -45,9 +45,9 @@
   [bd from to]
   (let [[over _] (find-move from to)]
     (when (and (occupied? bd from)
-             over
-             (occupied? bd over)
-             (vacant? bd to))
+               over
+               (occupied? bd over)
+               (vacant? bd to))
       [from over to])))
 
 (defn possible-moves
@@ -56,9 +56,9 @@
   (reduce-kv (fn [mvs k v]
                (if (occupied? bd k)
                  (concat mvs
-                         (filter (fn [[from over to]] (and (occupied? bd from)
-                                                           (occupied? bd over)
-                                                           (vacant? bd to)))
+                         (filter (fn [[_ over to]] (and
+                                                    (occupied? bd over)
+                                                    (vacant? bd to)))
                                  (map (fn [[o t]] [k o t]) v)))
                  mvs)) '() moves))
 
@@ -80,11 +80,12 @@
   "return a sequence of tuples of boards and accululated moves of all possible moves starting
   from the given board."
   [bd]
-  (let [root [bd []]
-        branches? (comp not-game-over? first)
+  (let [poss-moves (memoize possible-moves)
+        root [bd []]
+        branches? #(not (empty? (poss-moves (first %))))
         children (fn [[bd moves]]
                    (map (fn [mv]
-                          [(move bd mv) (conj moves mv)]) (possible-moves bd)))]
+                          [(move bd mv) (conj moves mv)]) (poss-moves bd)))]
     (tree-seq branches? children root)))
 
 (defn find-solution
@@ -100,11 +101,12 @@
 (comment
 
 
-
  (time (count (move-seq [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
 
  (time (count (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1] [1 1 0 1 1 1 0 0 0 0 0 0 0 0 0] #_[0 0 0 0 0 0 0 0 0 0 0 0 1 0 0])))
+ (time (first (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
 
+(reduce move [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1] (first (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
 (reductions move [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1] (first (find-solution [1 1 1 1 0 1 1 1 1 1 1 1 1 1 1])))
 
 
